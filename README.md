@@ -85,8 +85,23 @@ register its collector in `src/server/integrations/registry.ts` (the compiler re
 provider). Each provider implements `ActivityCollector` (`src/server/integrations/collector.ts`)
 and yields normalized activities (`commit`, `pull_request_authored`, `pull_request_reviewed`,
 `content_authored`, `content_edited`, `comment`, `message`). Activities are upserted by
-`(connection, kind, externalId)`, so re-syncing is idempotent. All collectors are currently stubs
-in `registry.ts`.
+`(connection, kind, externalId)`, so re-syncing is idempotent. A collector may also implement
+`verify()`; connections are checked with it before they are saved and from the "Test" button.
+
+**GitHub** (`src/server/integrations/github/`) collects, for the token's owner:
+
+- *Commits* authored in the range, merge commits excluded. Uses the commit search API, which only
+  indexes **default branches**: commits that only exist on unmerged branches are not counted.
+- *Pull requests authored*, by creation date.
+- *Pull requests reviewed*: one item per PR per day with at least one submitted review (replies in
+  review threads each create a review, so they are grouped).
+
+Scope is an optional list of `owner/name` repositories; empty means every repository the token
+can access. GitHub Enterprise Server works by setting the base URL (`https://host` or
+`https://host/api/v3`). Token permissions: a classic token with `repo` (or no scope for public
+repositories only), or a fine-grained token with read access to *Contents*, *Pull requests* and
+*Metadata* on the relevant repositories. Search is limited to 30 requests/minute; the client
+waits and retries on rate limits, and splits large ranges to stay under the 1000-results cap.
 
 ## Roadmap
 
@@ -101,9 +116,9 @@ in `registry.ts`.
 
 ### Next: first real data
 
-- [ ] **GitHub collector**: commits, pull requests authored, pull requests reviewed (GitHub.com and GitHub Enterprise)
+- [x] **GitHub collector**: commits, pull requests authored, pull requests reviewed (GitHub.com and GitHub Enterprise)
 - [ ] **Notion collector**: pages authored, pages edited, comments
-- [ ] "Test connection" endpoint and button, so a wrong token is caught when the connection is saved
+- [x] "Test connection" endpoint and button; credentials are also checked when a connection is saved
 - [ ] Edit a connection (label, scope, rotate the token); today a connection can only be added or removed
 - [ ] Rename a workspace in the UI (the API already supports it)
 
@@ -117,6 +132,8 @@ in `registry.ts`.
 
 ### Reports
 
+- [ ] Show sync progress for long ranges (large ranges can take minutes because of search rate limits)
+- [ ] GitHub: optionally count commits on non-default branches (per-repository commit listing)
 - [ ] Richer grouping and filtering (per repository, space or channel; per activity kind)
 - [ ] Remember the last selected time frame per workspace
 

@@ -15,6 +15,7 @@ export function SettingsPage() {
   const navigate = useNavigate();
   const [connections, setConnections] = useState<Connection[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [tests, setTests] = useState<Record<number, { ok: boolean; text: string }>>({});
 
   const load = useCallback(() => {
     api.listConnections(workspace.id).then(setConnections, (err: Error) => setError(err.message));
@@ -25,6 +26,15 @@ export function SettingsPage() {
     if (!confirm(`Remove ${c.label}?`)) return;
     await api.deleteConnection(workspace.id, c.id).catch((err: Error) => setError(err.message));
     load();
+  };
+
+  const test = async (c: Connection) => {
+    setTests((t) => ({ ...t, [c.id]: { ok: true, text: 'Testing…' } }));
+    const result = await api.testConnection(workspace.id, c.id).catch((err: Error) => ({ ok: false as const, error: err.message }));
+    const status = result.ok
+      ? { ok: true, text: result.account ? `Connected as ${result.account}` : 'No connection test for this provider yet' }
+      : { ok: false, text: result.error };
+    setTests((t) => ({ ...t, [c.id]: status }));
   };
 
   const deleteWorkspace = async () => {
@@ -48,7 +58,12 @@ export function SettingsPage() {
                   {c.label}
                   {c.baseUrl && <span className="muted"> · {c.baseUrl}</span>}
                   {c.scope.length > 0 && <span className="muted"> · {c.scope.join(', ')}</span>}
+                  <span className="muted"> · {c.lastSyncedAt ? `synced ${new Date(c.lastSyncedAt).toLocaleString()}` : 'never synced'}</span>
                   <span className="spacer" />
+                  {tests[c.id] && <span className={tests[c.id]!.ok ? 'muted' : 'error'}>{tests[c.id]!.text}</span>}
+                  <button className="link" onClick={() => test(c)}>
+                    Test
+                  </button>
                   <button className="link danger" onClick={() => remove(c)}>
                     Remove
                   </button>
@@ -84,11 +99,13 @@ function ConnectionForm({ category, workspaceId, onCreated }: FormProps) {
   const [secret, setSecret] = useState('');
   const [scope, setScope] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const def = getProvider(provider); // widened type: the form handles every optional field
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    setBusy(true);
     try {
       await api.createConnection(workspaceId, {
         provider,
@@ -106,6 +123,8 @@ function ConnectionForm({ category, workspaceId, onCreated }: FormProps) {
       onCreated();
     } catch (err) {
       setError((err as Error).message);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -146,8 +165,8 @@ function ConnectionForm({ category, workspaceId, onCreated }: FormProps) {
         <textarea rows={2} value={scope} placeholder={def.scopeHint} onChange={(e) => setScope(e.target.value)} />
       </label>
       {error && <p className="error">{error}</p>}
-      <button type="submit" disabled={!secret}>
-        Add {def.name}
+      <button type="submit" disabled={!secret || busy}>
+        {busy ? 'Verifying…' : `Add ${def.name}`}
       </button>
     </form>
   );

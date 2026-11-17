@@ -52,6 +52,9 @@ export interface CreateConnectionRequest {
   scope?: string[];
 }
 
+/** Result of checking a connection's credentials. `account` is null when the provider has no check yet. */
+export type ConnectionTestResult = { ok: true; account: string | null } | { ok: false; error: string };
+
 export interface Activity {
   id: number;
   connectionId: number;

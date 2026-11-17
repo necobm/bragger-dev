@@ -1,8 +1,16 @@
 import type { ActivityKind, ProviderId } from '../../shared/providers.js';
-import type { ConnectionWithSecret } from '../connections/connection-repository.js';
+
+/** What a collector needs to talk to a provider. Works for saved and not-yet-saved connections. */
+export interface ConnectionCredentials {
+  provider: ProviderId;
+  baseUrl: string | null;
+  username: string | null;
+  secret: string;
+  scope: string[];
+}
 
 export interface CollectContext {
-  connection: ConnectionWithSecret;
+  connection: ConnectionCredentials;
   /** Half-open instant range [since, until). */
   since: Date;
   until: Date;
@@ -26,7 +34,14 @@ export interface CollectedActivity {
  */
 export interface ActivityCollector {
   collect(ctx: CollectContext): AsyncIterable<CollectedActivity>;
+  /**
+   * Checks the credentials (and scope) work. Resolves with the account they belong to,
+   * rejects with a user-readable message otherwise. Optional: providers without it are saved unchecked.
+   */
+  verify?(connection: ConnectionCredentials, signal?: AbortSignal): Promise<{ account: string }>;
 }
+
+export type Collectors = Record<ProviderId, ActivityCollector>;
 
 export class CollectorNotImplementedError extends Error {
   constructor(provider: ProviderId) {

@@ -68,6 +68,14 @@ export function ReportPage() {
 
       {error && <p className="error">{error}</p>}
 
+      {syncResults && (
+        <p className="muted">
+          {syncResults.length === 0
+            ? 'No connections to sync. Add one in Settings.'
+            : `Sync done: ${syncResults.filter((r) => r.status === 'ok').reduce((n, r) => n + r.imported, 0)} new items.`}
+        </p>
+      )}
+
       {syncResults?.some((r) => r.status === 'error') && (
         <ul className="card warnings">
           {syncResults

@@ -1,6 +1,7 @@
 import type {
   ApiErrorBody,
   Connection,
+  ConnectionTestResult,
   CreateConnectionRequest,
   ReportResponse,
   SessionInfo,
@@ -60,6 +61,8 @@ export const api = {
   listConnections: (workspaceId: number) => request<Connection[]>('GET', `/workspaces/${workspaceId}/connections`),
   createConnection: (workspaceId: number, input: CreateConnectionRequest) =>
     request<Connection>('POST', `/workspaces/${workspaceId}/connections`, input),
+  testConnection: (workspaceId: number, connectionId: number) =>
+    request<ConnectionTestResult>('POST', `/workspaces/${workspaceId}/connections/${connectionId}/test`),
   deleteConnection: (workspaceId: number, connectionId: number) =>
     request<void>('DELETE', `/workspaces/${workspaceId}/connections/${connectionId}`),
 

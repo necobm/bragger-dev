@@ -33,7 +33,7 @@ export const PROVIDERS = {
     secretLabel: 'Personal access token',
     baseUrl: { required: false, default: 'https://api.github.com', placeholder: 'https://github.example.com/api/v3' },
     username: null,
-    scopeHint: 'Repositories (owner/name). Empty = all repositories you contributed to.',
+    scopeHint: 'Repositories as owner/name. Empty = every repository the token can access.',
   },
   notion: {
     id: 'notion',

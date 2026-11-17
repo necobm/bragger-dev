@@ -1,8 +1,9 @@
-import type { Connection, CreateConnectionRequest } from '../../shared/api.js';
+import type { Connection } from '../../shared/api.js';
 import { getProvider, type ProviderId } from '../../shared/providers.js';
 import type { SecretBox } from '../crypto/secret-box.js';
 import type { DB } from '../db/index.js';
 import { HttpError } from '../http-error.js';
+import type { ConnectionCredentials } from '../integrations/collector.js';
 
 interface ConnectionRow {
   id: number;
@@ -19,9 +20,7 @@ interface ConnectionRow {
 }
 
 /** A connection plus its decrypted secret. Only for server-side collectors, never serialize it. */
-export interface ConnectionWithSecret extends Connection {
-  secret: string;
-}
+export type ConnectionWithSecret = Connection & ConnectionCredentials;
 
 const toConnection = (r: ConnectionRow): Connection => ({
   id: r.id,
@@ -49,15 +48,17 @@ export class ConnectionRepository {
 
   listWithSecrets(workspaceId: number): ConnectionWithSecret[] {
     const rows = this.db.prepare('SELECT * FROM connections WHERE workspace_id = ?').all(workspaceId) as ConnectionRow[];
-    return rows.map((r) => ({ ...toConnection(r), secret: this.secrets.open(r.secret_enc) }));
+    return rows.map((r) => this.withSecret(r));
   }
 
-  create(workspaceId: number, input: CreateConnectionRequest): Connection {
-    const provider = getProvider(input.provider);
-    const baseUrl = input.baseUrl || provider.baseUrl?.default || null;
-    if (provider.baseUrl?.required && !input.baseUrl) throw HttpError.badRequest(`${provider.name} requires a base URL`);
-    if (provider.username && !input.username) throw HttpError.badRequest(`${provider.name} requires ${provider.username.label}`);
+  getWithSecret(workspaceId: number, id: number): ConnectionWithSecret {
+    const row = this.db.prepare('SELECT * FROM connections WHERE id = ? AND workspace_id = ?').get(id, workspaceId) as ConnectionRow | undefined;
+    if (!row) throw HttpError.notFound('Connection');
+    return this.withSecret(row);
+  }
 
+  create(workspaceId: number, label: string, credentials: ConnectionCredentials): Connection {
+    const provider = getProvider(credentials.provider);
     const row = this.db
       .prepare(
         `INSERT INTO connections (workspace_id, category, provider, label, base_url, username, auth_type, secret_enc, scope_json)
@@ -66,13 +67,13 @@ export class ConnectionRepository {
       .get(
         workspaceId,
         provider.category,
-        input.provider,
-        input.label,
-        baseUrl,
-        input.username || null,
+        credentials.provider,
+        label,
+        credentials.baseUrl,
+        credentials.username,
         provider.authType,
-        this.secrets.seal(input.secret),
-        JSON.stringify(input.scope ?? []),
+        this.secrets.seal(credentials.secret),
+        JSON.stringify(credentials.scope),
       ) as ConnectionRow;
     return toConnection(row);
   }
@@ -84,5 +85,9 @@ export class ConnectionRepository {
   delete(workspaceId: number, id: number): void {
     const { changes } = this.db.prepare('DELETE FROM connections WHERE id = ? AND workspace_id = ?').run(id, workspaceId);
     if (changes === 0) throw HttpError.notFound('Connection');
+  }
+
+  private withSecret(row: ConnectionRow): ConnectionWithSecret {
+    return { ...toConnection(row), secret: this.secrets.open(row.secret_enc) };
   }
 }

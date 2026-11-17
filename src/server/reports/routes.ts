@@ -9,10 +9,13 @@ import {
   type TimeframeInput,
 } from '../../shared/timeframe.js';
 import type { ConnectionRepository } from '../connections/connection-repository.js';
-import { collectors } from '../integrations/registry.js';
+import type { Collectors } from '../integrations/collector.js';
 import type { WorkspaceRepository } from '../workspaces/workspace-repository.js';
 import { idParams } from '../workspaces/routes.js';
 import type { ActivityRepository } from './activity-repository.js';
+
+/** Upper bound for syncing one connection (search API rate limits can make large ranges slow). */
+const SYNC_TIMEOUT_MS = 10 * 60 * 1000;
 
 const timeframeQuery = z.object({
   preset: z.enum(TIMEFRAME_PRESETS).default(DEFAULT_TIMEFRAME),
@@ -31,9 +34,10 @@ interface Options {
   workspaces: WorkspaceRepository;
   connections: ConnectionRepository;
   activities: ActivityRepository;
+  collectors: Collectors;
 }
 
-export const reportRoutes: FastifyPluginAsync<Options> = async (app, { workspaces, connections, activities }) => {
+export const reportRoutes: FastifyPluginAsync<Options> = async (app, { workspaces, connections, activities, collectors }) => {
   /** GET /workspaces/:id/report?preset=last_month | ?preset=custom&from=YYYY-MM-DD&to=YYYY-MM-DD */
   app.get('/workspaces/:id/report', async (request): Promise<ReportResponse> => {
     const { id } = idParams.parse(request.params);
@@ -56,7 +60,7 @@ export const reportRoutes: FastifyPluginAsync<Options> = async (app, { workspace
     for (const connection of connections.listWithSecrets(id)) {
       let imported = 0;
       try {
-        for await (const item of collectors[connection.provider].collect({ connection, since, until })) {
+        for await (const item of collectors[connection.provider].collect({ connection, since, until, signal: AbortSignal.timeout(SYNC_TIMEOUT_MS) })) {
           if (activities.upsert(id, connection.id, connection.provider, item)) imported++;
         }
         connections.markSynced(connection.id);

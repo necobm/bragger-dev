@@ -1,5 +1,6 @@
 import type { ProviderId } from '../../shared/providers.js';
-import { CollectorNotImplementedError, type ActivityCollector } from './collector.js';
+import { CollectorNotImplementedError, type ActivityCollector, type Collectors } from './collector.js';
+import { createGitHubCollector } from './github/collector.js';
 
 const notImplemented = (provider: ProviderId): ActivityCollector => ({
   async *collect() {
@@ -8,10 +9,12 @@ const notImplemented = (provider: ProviderId): ActivityCollector => ({
 });
 
 /**
- * One collector per provider. Replace each stub with a real implementation in
- * src/server/integrations/<provider>.ts.
+ * One collector per provider (the type requires an entry for every provider in the catalog).
+ * Implementations live in src/server/integrations/<provider>/.
  */
-export const collectors: Record<ProviderId, ActivityCollector> = {
-  github: notImplemented('github'),
-  notion: notImplemented('notion'),
-};
+export function createCollectors(): Collectors {
+  return {
+    github: createGitHubCollector(),
+    notion: notImplemented('notion'),
+  };
+}

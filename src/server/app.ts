@@ -13,6 +13,8 @@ import { connectionRoutes } from './connections/routes.js';
 import type { SecretBox } from './crypto/secret-box.js';
 import type { DB } from './db/index.js';
 import { HttpError } from './http-error.js';
+import type { Collectors } from './integrations/collector.js';
+import { createCollectors } from './integrations/registry.js';
 import { ActivityRepository } from './reports/activity-repository.js';
 import { reportRoutes } from './reports/routes.js';
 import { workspaceRoutes } from './workspaces/routes.js';
@@ -23,11 +25,13 @@ export interface AppDeps {
   db: DB;
   secrets: SecretBox;
   verifier: PasswordVerifier;
+  /** Provider collectors; injectable for tests. */
+  collectors?: Collectors;
 }
 
 const ALLOWED_HOSTNAMES = new Set(['127.0.0.1', 'localhost']);
 
-export async function buildApp({ config, db, secrets, verifier }: AppDeps) {
+export async function buildApp({ config, db, secrets, verifier, collectors = createCollectors() }: AppDeps) {
   const app = Fastify({
     logger: { level: config.isDev ? 'debug' : 'info', redact: ['req.headers.cookie'] },
   });
@@ -68,8 +72,8 @@ export async function buildApp({ config, db, secrets, verifier }: AppDeps) {
     async (api) => {
       api.addHook('onRequest', requireSession(sessions));
       await api.register(workspaceRoutes, { workspaces });
-      await api.register(connectionRoutes, { workspaces, connections });
-      await api.register(reportRoutes, { workspaces, connections, activities });
+      await api.register(connectionRoutes, { workspaces, connections, collectors });
+      await api.register(reportRoutes, { workspaces, connections, activities, collectors });
     },
     { prefix: '/api' },
   );
