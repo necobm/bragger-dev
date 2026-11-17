@@ -1,0 +1,20 @@
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+// The web UI lives in ./web and is served by the Fastify server in production (dist/web).
+// In development, Vite proxies /api to the dev server started by `npm run dev:server`.
+export default defineConfig({
+  root: 'web',
+  plugins: [react()],
+  build: {
+    outDir: '../dist/web',
+    emptyOutDir: true,
+  },
+  server: {
+    port: 5173,
+    strictPort: true,
+    proxy: {
+      '/api': 'http://127.0.0.1:4710',
+    },
+  },
+});
